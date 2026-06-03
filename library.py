@@ -2,16 +2,6 @@
 import os
 import boto3  # AWS SDK for Python
 from botocore.exceptions import NoCredentialsError
-try:
-    import streamlit as st
-    _STREAMLIT_SECRETS = hasattr(st, "secrets") and "aws" in st.secrets
-except Exception:
-    _STREAMLIT_SECRETS = False
-
-if _STREAMLIT_SECRETS:
-    os.environ["AWS_ACCESS_KEY_ID"] = st.secrets["aws"]["AWS_ACCESS_KEY_ID"]
-    os.environ["AWS_SECRET_ACCESS_KEY"] = st.secrets["aws"]["AWS_SECRET_ACCESS_KEY"]
-    os.environ["AWS_DEFAULT_REGION"] = st.secrets["aws"].get("AWS_DEFAULT_REGION", "us-east-1")
 from langchain_community.document_loaders import JSONLoader  # Utility to load JSON files
 from langchain_aws import ChatBedrockConverse  # Chat interface for Bedrock LLM
 from langchain_aws import BedrockEmbeddings  # Embeddings for Titan model

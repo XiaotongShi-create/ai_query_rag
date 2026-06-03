@@ -1,4 +1,12 @@
+import os
 import streamlit as st
+
+# Load AWS credentials from Streamlit secrets if available (for cloud deployment)
+if "aws" in st.secrets:
+    os.environ["AWS_ACCESS_KEY_ID"] = st.secrets["aws"]["AWS_ACCESS_KEY_ID"]
+    os.environ["AWS_SECRET_ACCESS_KEY"] = st.secrets["aws"]["AWS_SECRET_ACCESS_KEY"]
+    os.environ["AWS_DEFAULT_REGION"] = st.secrets["aws"].get("AWS_DEFAULT_REGION", "us-east-1")
+
 import library as lib
 from io import StringIO
 import boto3
