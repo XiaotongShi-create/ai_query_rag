@@ -1,0 +1,114 @@
+{
+  "tables": [
+    {
+      "separator": "table_1",
+      "name": "schema_a.orders",
+      "schema": "CREATE TABLE schema_a.orders (order_id character varying(200), order_date timestamp without time zone, customer_id numeric(38,0), order_status character varying(200), item_id character varying(200) );",
+      "description": "This table stores information about orders placed by customers.",
+      "columns": [
+        {
+          "name": "order_id",
+          "description": "unique identifier for orders.",
+          "synonyms": ["order id"]
+        },
+        {
+          "name": "order_date",
+          "description": "timestamp when the order was placed",
+          "synonyms": ["order time", "order day"]
+        },
+        {
+          "name": "customer_id",
+          "description": "Id of the customer associated with the order",
+          "synonyms": ["customer id", "userid"]
+        },
+        {
+          "name": "order_status",
+          "description": "current status of the order, sample values are: shipped, delivered, cancelled",
+          "synonyms": ["order status"]
+        },
+        {
+          "name": "item_id",
+          "description": "item associated with the order",
+          "synonyms": ["item id"]
+        }
+      ],
+      "sample_queries": [
+        {
+          "query": "select count(order_id) as total_orders from schema_a.orders where customer_id = '9782226' and order_status = 'cancelled'",
+          "user_input": "Count of orders cancelled by customer id: 978226"
+        }
+      ]
+    },
+    {
+      "separator": "table_2",
+      "name": "schema_a.customers",
+      "schema": "CREATE TABLE schema_a.customers (customer_id numeric(38,0), customer_name character varying(200), registration_date timestamp without time zone, country character varying(200) );",
+      "description": "This table stores the details of customers.",
+      "columns": [
+        {
+          "name": "customer_id",
+          "description": "Id of the customer, unique identifier for customers",
+          "synonyms": ["customer id"]
+        },
+        {
+          "name": "customer_name",
+          "description": "name of the customer",
+          "synonyms": ["name"]
+        },
+        {
+          "name": "registration_date",
+          "description": "registration timestamp when customer registered",
+          "synonyms": ["sign up time", "registration time"]
+        },
+        {
+          "name": "country",
+          "description": "customer's original country",
+          "synonyms": ["location", "customer's region"]
+        }
+      ],
+      "sample_queries": [
+        {
+          "query": "select count(customer_id) as total_customers from schema_a.customers where country = 'India' and to_char(registration_date, 'YYYY') = '2024'",
+          "user_input": "The number of customers registered from India in 2024"
+        },
+        {
+          "query": "select count(o.order_id) as order_count from schema_a.orders o join schema_a.customers c on o.customer_id = c.customer_id where c.customer_name = 'john' and to_char(o.order_date, 'YYYY-MM') = '2024-01'",
+          "user_input": "Total orders placed in January 2024 by customer name john"
+        }
+      ]
+    },
+    {
+      "separator": "table_3",
+      "name": "schema_a.items",
+      "schema": "CREATE TABLE schema_a.items (item_id character varying(200), item_name character varying(200), listing_date timestamp without time zone );",
+      "description": "This table stores the complete details of items listed in the catalog.",
+      "columns": [
+        {
+          "name": "item_id",
+          "description": "Id of the item, unique identifier for items",
+          "synonyms": ["item id"]
+        },
+        {
+          "name": "item_name",
+          "description": "name of the item",
+          "synonyms": ["name"]
+        },
+        {
+          "name": "listing_date",
+          "description": "listing timestamp when the item was registered",
+          "synonyms": ["listing time", "registration time"]
+        }
+      ],
+      "sample_queries": [
+        {
+          "query": "select count(item_id) as total_items from schema_a.items where to_char(listing_date, 'YYYY') = '2024'",
+          "user_input": "how many items are listed in 2024"
+        },
+        {
+          "query": "select count(o.order_id) as order_count from schema_a.orders o join schema_a.customers c on o.customer_id = c.customer_id join schema_a.items i on o.item_id = i.item_id where c.customer_name = 'john' and i.item_name = 'iphone'",
+          "user_input": "how many orders are placed for item 'iphone' by customer name john"
+        }
+      ]
+    }
+  ]
+}
