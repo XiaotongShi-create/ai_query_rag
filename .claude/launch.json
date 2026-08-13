@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "streamlit",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd /Users/shixiaotong/Desktop/side_projects/ai_query_rag && source .venv/bin/activate && streamlit run app.py --server.port 8501 --server.headless true"],
+      "port": 8501
+    }
+  ]
+}

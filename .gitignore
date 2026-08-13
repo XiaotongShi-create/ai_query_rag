@@ -20,3 +20,6 @@ __pycache__/
 # IDE
 .vscode/
 .idea/
+
+# Claude Code local-only config (personal permission tracking)
+.claude/settings.local.json
