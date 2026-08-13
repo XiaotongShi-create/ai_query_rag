@@ -1,5 +1,8 @@
 import os
+from dotenv import load_dotenv
 import streamlit as st
+
+load_dotenv()  # populates os.environ from a local .env file; no-op if none exists (e.g. in prod)
 
 # Load AWS credentials from Streamlit secrets if available (Streamlit Cloud)
 # Falls back to environment variables if set directly (Render, App Runner, EC2, etc.)
@@ -12,6 +15,7 @@ except Exception:
     pass  # Credentials will be read from environment variables directly
 
 import library as lib
+import db
 from io import StringIO
 import boto3
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError
@@ -115,9 +119,19 @@ elif selected_menu_item == "Generate SQL Query":
                 st.error(lib.get_aws_setup_message())
                 st.stop()
             
-            # Display chatbot response
+            # Display chatbot response, and run the generated SQL against real data if present
             with st.chat_message("assistant"):
                 st.markdown(chat_response)
+
+                sql_query = lib.extract_sql(chat_response)
+                if sql_query:
+                    try:
+                        results_df = db.run_select_query(sql_query)
+                        st.dataframe(results_df)
+                    except db.UnsafeQueryError as e:
+                        st.warning(f"Generated query was blocked before running: {e}")
+                    except Exception as e:
+                        st.warning(f"Query didn't run against the database: {e}")
 
             # Add chatbot response to chat history
             st.session_state.chat_history.append({"role": "assistant", "text": chat_response})

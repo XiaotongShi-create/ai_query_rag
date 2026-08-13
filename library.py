@@ -1,5 +1,6 @@
 # Import the necessary libraries
 import os
+import re
 import boto3  # AWS SDK for Python
 from botocore.exceptions import NoCredentialsError
 from langchain_community.document_loaders import JSONLoader  # Utility to load JSON files
@@ -118,10 +119,27 @@ template = """ Read table information from the context. Each table contains the 
   - Synonyms: Optional synonyms for the column name
 - Sample Queries: Optional sample queries for the table, listed under the 'sample_data' key
 
-Given this structure, Your task is to provide the SQL query using Amazon Redshift syntax that would retrieve the data for following question. The produced query should be functional, efficient, and adhere to best practices in SQL query optimization.
+Given this structure, your task is to provide the SQL query using Amazon Redshift syntax that would retrieve the data for the following question. The produced query should be functional, efficient, and adhere to best practices in SQL query optimization.
+
+Only use tables and columns that appear in the context. Write exactly one query, wrapped in a fenced code block like this:
+```sql
+SELECT ...
+```
+Add one short sentence above the code block explaining what the query does.
 
 Question: {}
 """
+
+_SQL_BLOCK_PATTERN = re.compile(r"```sql\s*(.*?)```", re.IGNORECASE | re.DOTALL)
+
+
+def extract_sql(response_text):
+    """Pull the SQL out of a ```sql fenced block in the model's response, if present."""
+    match = _SQL_BLOCK_PATTERN.search(response_text)
+    if match:
+        return match.group(1).strip()
+    return None
+
 
 # Function to get the response from the conversational retrieval chain
 def get_rag_chat_response(input_text, memory, index):
