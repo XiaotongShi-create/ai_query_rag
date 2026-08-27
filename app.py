@@ -15,7 +15,6 @@ except Exception:
     pass  # Credentials will be read from environment variables directly
 
 import library as lib
-import db
 from io import StringIO
 import boto3
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError
@@ -77,10 +76,6 @@ elif selected_menu_item == "Generate SQL Query":
             st.error(lib.get_aws_setup_message())
             st.stop()
 
-        # Initialize memory if it doesn't exist in session state
-        if 'memory' not in st.session_state:
-            st.session_state.memory = lib.get_memory()
-
         # Initialize chat history if it doesn't exist in session state
         if 'chat_history' not in st.session_state:
             st.session_state.chat_history = []
@@ -111,27 +106,30 @@ elif selected_menu_item == "Generate SQL Query":
             # Add user input to chat history
             st.session_state.chat_history.append({"role": "user", "text": input_text})
 
-            # Get chatbot response
+            # Build a fresh agent for this turn (cheap: just wiring, no index rebuild)
+            # so captured_results only ever holds this turn's query, not prior turns'.
+            agent, captured_results = lib.build_agent(st.session_state.vector_index)
+
+            # The agent decides for itself whether to search the schema, run SQL,
+            # ask a clarifying question, or retry after a failed query -- see the
+            # tool definitions and system prompt in library.py.
+            agent_messages = [
+                {"role": message["role"], "content": message["text"]}
+                for message in st.session_state.chat_history
+            ]
             try:
-                chat_response = lib.get_rag_chat_response(input_text=input_text, memory=st.session_state.memory,
-                                                           index=st.session_state.vector_index)
+                agent_result = agent.invoke({"messages": agent_messages})
             except (NoCredentialsError, PartialCredentialsError):
                 st.error(lib.get_aws_setup_message())
                 st.stop()
-            
-            # Display chatbot response, and run the generated SQL against real data if present
+
+            chat_response = lib.extract_final_text(agent_result)
+
+            # Display the agent's answer, plus the real query results if it ran one
             with st.chat_message("assistant"):
                 st.markdown(chat_response)
-
-                sql_query = lib.extract_sql(chat_response)
-                if sql_query:
-                    try:
-                        results_df = db.run_select_query(sql_query)
-                        st.dataframe(results_df)
-                    except db.UnsafeQueryError as e:
-                        st.warning(f"Generated query was blocked before running: {e}")
-                    except Exception as e:
-                        st.warning(f"Query didn't run against the database: {e}")
+                for results_df in captured_results:
+                    st.dataframe(results_df)
 
             # Add chatbot response to chat history
             st.session_state.chat_history.append({"role": "assistant", "text": chat_response})

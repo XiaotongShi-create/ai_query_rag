@@ -1,16 +1,16 @@
 # Import the necessary libraries
 import os
-import re
 import boto3  # AWS SDK for Python
 from botocore.exceptions import NoCredentialsError
+from langchain.agents import create_agent  # Tool-calling agent loop
 from langchain_community.document_loaders import JSONLoader  # Utility to load JSON files
 from langchain_aws import ChatBedrockConverse  # Chat interface for Bedrock LLM
 from langchain_aws import BedrockEmbeddings  # Embeddings for Titan model
-from langchain_classic.memory import ConversationBufferWindowMemory  # Memory to store chat conversations
 from langchain_classic.indexes import VectorstoreIndexCreator  # Create vector indexes
 from langchain_community.vectorstores import FAISS  # Vector store using FAISS library
 from langchain_text_splitters import RecursiveCharacterTextSplitter  # Split text into chunks
-from langchain_classic.chains import ConversationalRetrievalChain  # Conversational retrieval chain
+
+import db
 
 AWS_REGION = "us-east-1"
 BEDROCK_CHAT_MODEL_ID = "us.anthropic.claude-sonnet-4-6"
@@ -102,52 +102,76 @@ def get_index(schema_type):
 
     return db_index_from_loader
 
-# Function to get the memory for storing chat conversations
-def get_memory():
-    memory = ConversationBufferWindowMemory(memory_key="chat_history", return_messages=True)  # Create memory
+def _make_search_schema_tool(index):
+    retriever = index.vectorstore.as_retriever()
 
-    return memory
+    def search_schema(question: str) -> str:
+        """Look up which tables and columns are relevant to a question about the
+        Northwind database. Call this before writing SQL if you aren't already
+        sure which tables/columns apply."""
+        docs = retriever.invoke(question)
+        return "\n\n".join(doc.page_content for doc in docs)
 
-# Template for the question prompt
-template = """ Read table information from the context. Each table contains the following information:
-- Name: The name of the table
-- Description: A brief description of the table
-- Columns: The columns of the table, listed under the 'columns' key. Each column contains:
-  - Name: The name of the column
-  - Description: A brief description of the column
-  - Type: The data type of the column
-  - Synonyms: Optional synonyms for the column name
-- Sample Queries: Optional sample queries for the table, listed under the 'sample_data' key
+    return search_schema
 
-Given this structure, your task is to provide the SQL query using Amazon Redshift syntax that would retrieve the data for the following question. The produced query should be functional, efficient, and adhere to best practices in SQL query optimization.
 
-Only use tables and columns that appear in the context. Write exactly one query, wrapped in a fenced code block like this:
-```sql
-SELECT ...
-```
-Add one short sentence above the code block explaining what the query does.
+def _make_run_sql_query_tool(captured_results):
+    def run_sql_query(sql: str) -> str:
+        """Execute exactly one read-only SQL SELECT query (Amazon Redshift syntax)
+        against the Northwind database and return the results. If this returns an
+        error, read it and try a corrected query -- don't give up after one try."""
+        try:
+            result_df = db.run_select_query(sql)
+        except db.UnsafeQueryError as e:
+            return f"Query rejected: {e}"
+        except Exception as e:
+            return f"Query failed: {e}"
 
-Question: {}
+        captured_results.append(result_df)
+        if result_df.empty:
+            return "Query ran successfully but returned no rows."
+        return result_df.to_csv(index=False)
+
+    return run_sql_query
+
+
+AGENT_SYSTEM_PROMPT = """You are a data analyst assistant for a Northwind sales \
+database (customers, orders, order_details, products, categories, employees, \
+shippers).
+
+When the user asks a question:
+1. If you aren't already sure which tables/columns apply, call search_schema first.
+2. If the question is ambiguous or missing information you need (a time range, \
+which metric, which entity), ask a short clarifying question in plain text instead \
+of calling any tool. Do not guess.
+3. Once you have enough information, call run_sql_query with exactly one SELECT \
+statement using Amazon Redshift syntax.
+4. If run_sql_query returns an error, read it and try a corrected query.
+5. Once you have real results, answer in plain language summarizing what you \
+found -- don't just repeat the raw table.
 """
 
-_SQL_BLOCK_PATTERN = re.compile(r"```sql\s*(.*?)```", re.IGNORECASE | re.DOTALL)
+
+def build_agent(index):
+    """Builds a tool-calling agent bound to a specific schema index.
+
+    Returns (agent, captured_results): captured_results is a list that the
+    run_sql_query tool appends its DataFrame to, so the UI can render the table
+    separately from the agent's plain-language answer.
+    """
+    llm = get_llm()
+    captured_results = []
+    tools = [_make_search_schema_tool(index), _make_run_sql_query_tool(captured_results)]
+    agent = create_agent(model=llm, tools=tools, system_prompt=AGENT_SYSTEM_PROMPT)
+    return agent, captured_results
 
 
-def extract_sql(response_text):
-    """Pull the SQL out of a ```sql fenced block in the model's response, if present."""
-    match = _SQL_BLOCK_PATTERN.search(response_text)
-    if match:
-        return match.group(1).strip()
-    return None
-
-
-# Function to get the response from the conversational retrieval chain
-def get_rag_chat_response(input_text, memory, index):
-    llm = get_llm()  # Get the LLM
-
-    conversation_with_retrieval = ConversationalRetrievalChain.from_llm(
-        llm, index.vectorstore.as_retriever(), memory=memory, verbose=True)  # Create conversational retrieval chain
-
-    chat_response = conversation_with_retrieval.invoke({"question": template.format(input_text)})  # Invoke the chain
-
-    return chat_response['answer']  # Return the answer
+def extract_final_text(agent_result):
+    """Pull the plain-text answer out of the last message returned by the agent."""
+    last_message = agent_result["messages"][-1]
+    content = last_message.content
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(block.get("text", "") for block in content if isinstance(block, dict))
+    return str(content)
