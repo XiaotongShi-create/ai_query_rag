@@ -2,111 +2,153 @@
   "tables": [
     {
       "separator": "table_1",
-      "name": "schema_a.orders",
-      "schema": "CREATE TABLE schema_a.orders (order_id character varying(200), order_date timestamp without time zone, customer_id numeric(38,0), order_status character varying(200), item_id character varying(200) );",
-      "description": "This table stores information about orders placed by customers.",
+      "name": "customers",
+      "schema": "CREATE TABLE customers (customer_id character varying(5), company_name character varying(40), contact_name character varying(30), contact_title character varying(30), city character varying(15), region character varying(15), country character varying(15));",
+      "description": "Companies that place orders. One row per customer account.",
       "columns": [
-        {
-          "name": "order_id",
-          "description": "unique identifier for orders.",
-          "synonyms": ["order id"]
-        },
-        {
-          "name": "order_date",
-          "description": "timestamp when the order was placed",
-          "synonyms": ["order time", "order day"]
-        },
-        {
-          "name": "customer_id",
-          "description": "Id of the customer associated with the order",
-          "synonyms": ["customer id", "userid"]
-        },
-        {
-          "name": "order_status",
-          "description": "current status of the order, sample values are: shipped, delivered, cancelled",
-          "synonyms": ["order status"]
-        },
-        {
-          "name": "item_id",
-          "description": "item associated with the order",
-          "synonyms": ["item id"]
-        }
+        {"name": "customer_id", "description": "unique identifier for a customer (5-character code)", "synonyms": ["customer id", "client id"]},
+        {"name": "company_name", "description": "name of the customer's company", "synonyms": ["customer name", "client name", "company"]},
+        {"name": "contact_name", "description": "name of the primary contact person at the company"},
+        {"name": "city", "description": "city the customer is located in"},
+        {"name": "region", "description": "state/region the customer is located in"},
+        {"name": "country", "description": "country the customer is located in", "synonyms": ["location"]}
       ],
       "sample_queries": [
         {
-          "query": "select count(order_id) as total_orders from schema_a.orders where customer_id = '9782226' and order_status = 'cancelled'",
-          "user_input": "Count of orders cancelled by customer id: 978226"
+          "query": "select count(*) as total_customers from customers where country = 'Germany'",
+          "user_input": "How many customers do we have in Germany?"
+        },
+        {
+          "query": "select country, count(*) as customer_count from customers group by country order by customer_count desc limit 10",
+          "user_input": "Which countries have the most customers?"
         }
       ]
     },
     {
       "separator": "table_2",
-      "name": "schema_a.customers",
-      "schema": "CREATE TABLE schema_a.customers (customer_id numeric(38,0), customer_name character varying(200), registration_date timestamp without time zone, country character varying(200) );",
-      "description": "This table stores the details of customers.",
+      "name": "orders",
+      "schema": "CREATE TABLE orders (order_id smallint, customer_id character varying(5), employee_id smallint, order_date date, required_date date, shipped_date date, ship_via smallint, freight real, ship_country character varying(15));",
+      "description": "One row per order placed by a customer. Links to customers, employees, and order_details.",
       "columns": [
-        {
-          "name": "customer_id",
-          "description": "Id of the customer, unique identifier for customers",
-          "synonyms": ["customer id"]
-        },
-        {
-          "name": "customer_name",
-          "description": "name of the customer",
-          "synonyms": ["name"]
-        },
-        {
-          "name": "registration_date",
-          "description": "registration timestamp when customer registered",
-          "synonyms": ["sign up time", "registration time"]
-        },
-        {
-          "name": "country",
-          "description": "customer's original country",
-          "synonyms": ["location", "customer's region"]
-        }
+        {"name": "order_id", "description": "unique identifier for an order", "synonyms": ["order id"]},
+        {"name": "customer_id", "description": "id of the customer who placed the order", "synonyms": ["customer id"]},
+        {"name": "employee_id", "description": "id of the employee (sales rep) who handled the order", "synonyms": ["employee id", "sales rep"]},
+        {"name": "order_date", "description": "date the order was placed", "synonyms": ["order time", "order day"]},
+        {"name": "shipped_date", "description": "date the order was shipped; null if not yet shipped", "synonyms": ["ship date"]},
+        {"name": "ship_via", "description": "id of the shipper used for this order, references shippers.shipper_id"},
+        {"name": "freight", "description": "shipping cost for the order"},
+        {"name": "ship_country", "description": "country the order was shipped to"}
       ],
       "sample_queries": [
         {
-          "query": "select count(customer_id) as total_customers from schema_a.customers where country = 'India' and to_char(registration_date, 'YYYY') = '2024'",
-          "user_input": "The number of customers registered from India in 2024"
+          "query": "select count(*) as order_count from orders where order_date >= '1997-01-01' and order_date < '1998-01-01'",
+          "user_input": "How many orders were placed in 1997?"
         },
         {
-          "query": "select count(o.order_id) as order_count from schema_a.orders o join schema_a.customers c on o.customer_id = c.customer_id where c.customer_name = 'john' and to_char(o.order_date, 'YYYY-MM') = '2024-01'",
-          "user_input": "Total orders placed in January 2024 by customer name john"
+          "query": "select count(*) as unshipped_orders from orders where shipped_date is null",
+          "user_input": "How many orders have not shipped yet?"
+        },
+        {
+          "query": "select c.company_name, count(o.order_id) as order_count from orders o join customers c on o.customer_id = c.customer_id group by c.company_name order by order_count desc limit 5",
+          "user_input": "Which customers have placed the most orders?"
         }
       ]
     },
     {
       "separator": "table_3",
-      "name": "schema_a.items",
-      "schema": "CREATE TABLE schema_a.items (item_id character varying(200), item_name character varying(200), listing_date timestamp without time zone );",
-      "description": "This table stores the complete details of items listed in the catalog.",
+      "name": "order_details",
+      "schema": "CREATE TABLE order_details (order_id smallint, product_id smallint, unit_price real, quantity smallint, discount real);",
+      "description": "Line items for each order: which products, quantities, and prices. One row per product per order. Revenue for an order is sum(unit_price * quantity * (1 - discount)) across its line items.",
       "columns": [
-        {
-          "name": "item_id",
-          "description": "Id of the item, unique identifier for items",
-          "synonyms": ["item id"]
-        },
-        {
-          "name": "item_name",
-          "description": "name of the item",
-          "synonyms": ["name"]
-        },
-        {
-          "name": "listing_date",
-          "description": "listing timestamp when the item was registered",
-          "synonyms": ["listing time", "registration time"]
-        }
+        {"name": "order_id", "description": "id of the order this line item belongs to, references orders.order_id"},
+        {"name": "product_id", "description": "id of the product ordered, references products.product_id"},
+        {"name": "unit_price", "description": "price per unit at time of order"},
+        {"name": "quantity", "description": "number of units ordered"},
+        {"name": "discount", "description": "discount applied, as a decimal fraction (e.g. 0.15 = 15% off)"}
       ],
       "sample_queries": [
         {
-          "query": "select count(item_id) as total_items from schema_a.items where to_char(listing_date, 'YYYY') = '2024'",
-          "user_input": "how many items are listed in 2024"
+          "query": "select sum(unit_price * quantity * (1 - discount)) as total_revenue from order_details od join orders o on od.order_id = o.order_id where o.order_date >= '1997-01-01' and o.order_date < '1998-01-01'",
+          "user_input": "What was total revenue in 1997?"
         },
         {
-          "query": "select count(o.order_id) as order_count from schema_a.orders o join schema_a.customers c on o.customer_id = c.customer_id join schema_a.items i on o.item_id = i.item_id where c.customer_name = 'john' and i.item_name = 'iphone'",
-          "user_input": "how many orders are placed for item 'iphone' by customer name john"
+          "query": "select p.product_name, sum(od.quantity) as units_sold from order_details od join products p on od.product_id = p.product_id group by p.product_name order by units_sold desc limit 5",
+          "user_input": "What are the top 5 best-selling products by units sold?"
+        }
+      ]
+    },
+    {
+      "separator": "table_4",
+      "name": "products",
+      "schema": "CREATE TABLE products (product_id smallint, product_name character varying(40), supplier_id smallint, category_id smallint, unit_price real, units_in_stock smallint, discontinued integer);",
+      "description": "Catalog of items that can be ordered.",
+      "columns": [
+        {"name": "product_id", "description": "unique identifier for a product", "synonyms": ["item id"]},
+        {"name": "product_name", "description": "name of the product", "synonyms": ["item name"]},
+        {"name": "category_id", "description": "id of the category this product belongs to, references categories.category_id"},
+        {"name": "unit_price", "description": "list price per unit"},
+        {"name": "units_in_stock", "description": "current inventory count"},
+        {"name": "discontinued", "description": "1 if the product is discontinued, 0 if active"}
+      ],
+      "sample_queries": [
+        {
+          "query": "select count(*) as discontinued_count from products where discontinued = 1",
+          "user_input": "How many products are discontinued?"
+        },
+        {
+          "query": "select product_name, units_in_stock from products where units_in_stock < reorder_level and discontinued = 0",
+          "user_input": "Which active products are below their reorder level?"
+        }
+      ]
+    },
+    {
+      "separator": "table_5",
+      "name": "categories",
+      "schema": "CREATE TABLE categories (category_id smallint, category_name character varying(15), description text);",
+      "description": "Product categories, e.g. Beverages, Condiments, Produce.",
+      "columns": [
+        {"name": "category_id", "description": "unique identifier for a category"},
+        {"name": "category_name", "description": "name of the category", "synonyms": ["category"]}
+      ],
+      "sample_queries": [
+        {
+          "query": "select cat.category_name, sum(od.quantity) as units_sold from order_details od join products p on od.product_id = p.product_id join categories cat on p.category_id = cat.category_id group by cat.category_name order by units_sold desc",
+          "user_input": "Which product category sells the most units?"
+        }
+      ]
+    },
+    {
+      "separator": "table_6",
+      "name": "employees",
+      "schema": "CREATE TABLE employees (employee_id smallint, last_name character varying(20), first_name character varying(10), title character varying(30), hire_date date, reports_to smallint);",
+      "description": "Sales employees who handle orders.",
+      "columns": [
+        {"name": "employee_id", "description": "unique identifier for an employee"},
+        {"name": "first_name", "description": "employee's first name"},
+        {"name": "last_name", "description": "employee's last name"},
+        {"name": "title", "description": "employee's job title, e.g. Sales Representative"},
+        {"name": "hire_date", "description": "date the employee was hired"}
+      ],
+      "sample_queries": [
+        {
+          "query": "select e.first_name, e.last_name, count(o.order_id) as orders_handled from orders o join employees e on o.employee_id = e.employee_id group by e.first_name, e.last_name order by orders_handled desc limit 5",
+          "user_input": "Which employees have handled the most orders?"
+        }
+      ]
+    },
+    {
+      "separator": "table_7",
+      "name": "shippers",
+      "schema": "CREATE TABLE shippers (shipper_id smallint, company_name character varying(40), phone character varying(24));",
+      "description": "Shipping companies used to fulfill orders. Referenced by orders.ship_via.",
+      "columns": [
+        {"name": "shipper_id", "description": "unique identifier for a shipper"},
+        {"name": "company_name", "description": "name of the shipping company"}
+      ],
+      "sample_queries": [
+        {
+          "query": "select s.company_name, count(o.order_id) as order_count from orders o join shippers s on o.ship_via = s.shipper_id group by s.company_name order by order_count desc",
+          "user_input": "How many orders did each shipping company handle?"
         }
       ]
     }
