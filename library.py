@@ -149,6 +149,9 @@ statement using Amazon Redshift syntax.
 4. If run_sql_query returns an error, read it and try a corrected query.
 5. Once you have real results, answer in plain language summarizing what you \
 found -- don't just repeat the raw table.
+6. After answering, suggest one related follow-up question the user might want to \
+ask next (e.g. "would you like to also see X?"), based on what's in the data you \
+just looked at. Keep it to one sentence.
 """
 
 
