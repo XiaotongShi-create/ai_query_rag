@@ -14,7 +14,10 @@ try:
 except Exception:
     pass  # Credentials will be read from environment variables directly
 
+import audit
 import library as lib
+import time
+import uuid
 from io import StringIO
 import boto3
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError
@@ -27,6 +30,17 @@ from io import BytesIO
 s3_client = boto3.client('s3')
 bucket_name = 'simplesql-logs-rag'
 log_file_key = 'logs.xlsx'
+
+
+def record_feedback(answer_event_id):
+    """st.feedback callback: log a thumbs up/down as its own event, tied to the answer."""
+    rating = st.session_state.get(f"feedback_{answer_event_id}")
+    if rating is None:
+        return
+    error = audit.log_feedback(answer_event_id, st.session_state.session_id, "up" if rating == 1 else "down")
+    if error:
+        st.toast(f"Could not save feedback: {error}")
+
 
 # Set up the Streamlit page
 st.set_page_config(page_title="RAG AI Query")
@@ -80,6 +94,10 @@ elif selected_menu_item == "Generate SQL Query":
         if 'chat_history' not in st.session_state:
             st.session_state.chat_history = []
 
+        # One id per browser session, so audit events from the same conversation can be grouped
+        if 'session_id' not in st.session_state:
+            st.session_state.session_id = uuid.uuid4().hex
+
         # Initialize vector index if it doesn't exist in session state or if schema type has changed
         if 'vector_index' not in st.session_state or 'current_schema' not in st.session_state or st.session_state.current_schema != schema_type:
             try:
@@ -94,6 +112,9 @@ elif selected_menu_item == "Generate SQL Query":
         for message in st.session_state.chat_history:
             with st.chat_message(message["role"]):
                 st.markdown(message["text"])
+                if message.get("audit_id"):
+                    st.feedback("thumbs", key=f"feedback_{message['audit_id']}",
+                                on_change=record_feedback, args=(message["audit_id"],))
 
         # Get user input
         input_text = st.chat_input("Chat with your bot here", max_chars=100)
@@ -108,7 +129,14 @@ elif selected_menu_item == "Generate SQL Query":
 
             # Build a fresh agent for this turn (cheap: just wiring, no index rebuild)
             # so captured_results only ever holds this turn's query, not prior turns'.
-            agent, captured_results = lib.build_agent(st.session_state.vector_index)
+            # query_log records every SQL attempt (for the audit trail); scope makes db.py
+            # enforce the semantic layer's allowed tables/columns, not just the prompt.
+            query_log = []
+            agent, captured_results = lib.build_agent(
+                st.session_state.vector_index,
+                query_log=query_log,
+                scope=lib.get_allowed_scope(schema_type),
+            )
 
             # The agent decides for itself whether to search the schema, run SQL,
             # ask a clarifying question, or retry after a failed query -- see the
@@ -117,22 +145,36 @@ elif selected_menu_item == "Generate SQL Query":
                 {"role": message["role"], "content": message["text"]}
                 for message in st.session_state.chat_history
             ]
+            started = time.time()
             try:
                 agent_result = agent.invoke({"messages": agent_messages})
             except (NoCredentialsError, PartialCredentialsError):
                 st.error(lib.get_aws_setup_message())
                 st.stop()
+            latency_s = time.time() - started
 
             chat_response = lib.extract_final_text(agent_result)
 
-            # Display the agent's answer, plus the real query results if it ran one
+            # Audit trail: one immutable record per answer, including every SQL attempt
+            audit_id = audit.new_event_id()
+            audit_error = audit.log_answer(
+                audit_id, session_id=st.session_state.session_id, schema_type=schema_type,
+                model=lib.BEDROCK_CHAT_MODEL_ID, question=input_text, answer=chat_response,
+                query_log=query_log, latency_s=latency_s,
+            )
+
+            # Display the agent's answer, the real query results if it ran one, and feedback buttons
             with st.chat_message("assistant"):
                 st.markdown(chat_response)
                 for results_df in captured_results:
                     st.dataframe(results_df)
+                st.feedback("thumbs", key=f"feedback_{audit_id}",
+                            on_change=record_feedback, args=(audit_id,))
+                if audit_error:
+                    st.warning(f"Audit log write failed: {audit_error}")
 
             # Add chatbot response to chat history
-            st.session_state.chat_history.append({"role": "assistant", "text": chat_response})
+            st.session_state.chat_history.append({"role": "assistant", "text": chat_response, "audit_id": audit_id})
 
             # Log the conversation to S3
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
