@@ -46,10 +46,6 @@
     {"id": "discontinued_beverages", "type": "answerable",
      "question": "How many discontinued products are in the Beverages category?",
      "gold_sql": "SELECT COUNT(*) FROM products p JOIN categories c ON p.category_id = c.category_id WHERE c.category_name = 'Beverages' AND p.discontinued = 1"},
-    {"id": "redshift_filter_clause", "type": "answerable",
-     "question": "Using a FILTER clause, count how many orders shipped in 1997 were shipped after their required date.",
-     "note": "Postgres accepts FILTER, Redshift does not. The guardrail should reject it and the agent should recover with CASE WHEN.",
-     "gold_sql": "SELECT COUNT(*) FROM orders WHERE shipped_date >= '1997-01-01' AND shipped_date < '1998-01-01' AND shipped_date > required_date"},
 
     {"id": "clarify_best_customers", "type": "clarify",
      "question": "Show me the best customers"},

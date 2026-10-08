@@ -94,17 +94,6 @@ class EnforcesSemanticLayerScope(unittest.TestCase):
         db.validate_query("SELECT phone FROM customers", scope=None)  # no scope -> only read-only checks
 
 
-class RejectsPostgresOnlySyntaxThatRedshiftLacks(unittest.TestCase):
-    def test_filter_clause(self):
-        self.assertIn("CASE WHEN", rejected("SELECT COUNT(*) FILTER (WHERE freight > 10) FROM orders"))
-
-    def test_json_operators(self):
-        rejected("SELECT company_name ->> 'x' FROM customers")
-
-    def test_lateral(self):
-        rejected("SELECT o.order_id FROM orders o, LATERAL (SELECT 1) l")
-
-
 class RowLimit(unittest.TestCase):
     def limit_for(self, sql, limit=10):
         return db._with_row_limit(sql, db.validate_query(sql), limit)
@@ -130,7 +119,7 @@ class SemanticLayerIsConsistent(unittest.TestCase):
     def test_ddl_columns_match_documented_columns(self):
         for table in self.tables:
             with self.subTest(table["name"]):
-                ddl = sqlglot.parse_one(table["schema"], read="redshift")
+                ddl = sqlglot.parse_one(table["schema"], read="postgres")
                 ddl_columns = {c.name.lower() for c in ddl.find_all(exp.ColumnDef)}
                 documented = {c["name"].lower() for c in table["columns"]}
                 self.assertEqual(ddl_columns, documented)

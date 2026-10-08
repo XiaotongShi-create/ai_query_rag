@@ -1,19 +1,17 @@
-"""Data layer: executes agent-generated SQL against Postgres (standing in for Redshift).
+"""Data layer: executes agent-generated SQL against Postgres.
 
 Kept separate from library.py (AI layer) and app.py (UI layer) on purpose --
 this module owns the one thing that's allowed to run a query against real data,
 and every query goes through the same guardrail before it's executed.
 
 Guardrail layers, outermost first:
-  1. Parse: the SQL must parse (Redshift dialect) as exactly one statement.
+  1. Parse: the SQL must parse (Postgres dialect) as exactly one statement.
   2. Read-only: the parse tree may contain no write/DDL/side-effect nodes anywhere,
      including inside CTEs (writable CTEs are the classic way around keyword checks).
   3. Scope: only tables/columns documented in the semantic layer may be touched
      (see Table_Schema_A.json); SELECT * on a physical table is refused.
-  4. Redshift lint: constructs Postgres accepts but Redshift doesn't are refused, so
-     testing on Postgres can't hide a dialect problem.
-  5. Limits: row cap, statement timeout, and a READ ONLY transaction enforced by the
-     database itself as a backstop in case 1-4 ever miss something.
+  4. Limits: row cap, statement timeout, and a READ ONLY transaction enforced by the
+     database itself as a backstop in case 1-3 ever miss something.
 """
 import os
 from contextlib import closing
@@ -57,7 +55,7 @@ def _function_name(node: exp.Expression) -> str:
 
 def _parse_single_statement(sql: str) -> exp.Expression:
     try:
-        statements = sqlglot.parse(sql, read="redshift")
+        statements = sqlglot.parse(sql, read="postgres")
     except SqlglotError as e:
         raise UnsafeQueryError(f"Could not parse the query as SQL: {str(e)[:150]}")
     statements = [s for s in statements if s is not None]
@@ -78,22 +76,6 @@ def _check_read_only(tree: exp.Expression) -> None:
     for func in tree.find_all(exp.Func):
         if _function_name(func) in _DENIED_FUNCTIONS:
             raise UnsafeQueryError(f"Function {_function_name(func)}() is not allowed.")
-
-
-def _check_redshift_compatible(tree: exp.Expression) -> None:
-    """Refuse Postgres-only syntax that real Redshift would reject at execution time."""
-    if tree.find(exp.Filter):
-        raise UnsafeQueryError(
-            "The FILTER (WHERE ...) clause is not supported in Redshift; "
-            "use SUM(CASE WHEN ... THEN 1 ELSE 0 END) or COUNT(CASE WHEN ... END) instead."
-        )
-    if tree.find(exp.JSONExtract, exp.JSONExtractScalar):
-        raise UnsafeQueryError(
-            "The -> / ->> JSON operators are not supported in Redshift; "
-            "use json_extract_path_text() instead."
-        )
-    if tree.find(exp.Lateral):
-        raise UnsafeQueryError("LATERAL joins are not supported in Redshift; rewrite with a join or subquery.")
 
 
 def _derived_names(tree: exp.Expression) -> set:
@@ -158,7 +140,6 @@ def validate_query(sql: str, scope: Scope = None) -> exp.Expression:
     """Run every static guardrail check; returns the parse tree or raises UnsafeQueryError."""
     tree = _parse_single_statement(sql)
     _check_read_only(tree)
-    _check_redshift_compatible(tree)
     if scope is not None:
         _check_scope(tree, scope)
     return tree

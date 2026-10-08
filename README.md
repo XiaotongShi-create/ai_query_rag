@@ -4,8 +4,7 @@ Ask questions about sales data in plain English. An LLM agent finds the relevant
 runs it against a real database, and answers with the result. When a question is ambiguous it asks
 instead of guessing; when a query fails it reads the error and tries again.
 
-The data is the public Northwind dataset (customers, orders, products…) in Postgres, standing in for
-a Redshift warehouse. The focus of the project is making an AI data product **trustworthy**: every
+The data is the public Northwind dataset (customers, orders, products…) in Postgres. The focus of the project is making an AI data product **trustworthy**: every
 answer is checked by guardrails, recorded in an audit trail, open to user feedback, and measured
 against a golden question set.
 
@@ -17,7 +16,7 @@ flowchart LR
     UI --> A[Agent: Claude on Bedrock<br/>LangChain create_agent<br/>library.py]
     A -- search_schema --> SL[(Semantic layer<br/>Table_Schema_A.json<br/>FAISS + Titan embeddings)]
     A -- run_sql_query --> G{Guardrail<br/>db.py}
-    G -- allowed --> DB[(Postgres<br/>stand-in for Redshift)]
+    G -- allowed --> DB[(Postgres)]
     G -- rejected + reason --> A
     DB -- rows or error --> A
     UI -- answer, SQL attempts,<br/>latency --> AU[(S3 audit trail<br/>audit.py)]
@@ -45,8 +44,7 @@ rejections) are fed back to the model, which is what lets it self-correct.
 | Concern | What is implemented | Where |
 |---|---|---|
 | Allowed data scope | Only tables/columns documented in the semantic layer can be queried; `SELECT *` on a table is refused. The same file feeds the model's schema search *and* the code that enforces scope, so what the model is told and what is allowed can't drift apart. | `db.py`, `library.get_allowed_scope` |
-| Read-only | SQL is parsed (sqlglot, Redshift dialect), not pattern-matched: one statement only, no write/DDL node anywhere in the tree (including writable CTEs), no `SELECT … INTO`, no side-effect functions such as `pg_sleep`. A `READ ONLY` transaction is the backstop if the parser ever misses something. | `db.py` |
-| Redshift compatibility | Postgres-only syntax Redshift lacks (`FILTER`, `->>`, `LATERAL`) is rejected with a fix hint, so developing against Postgres doesn't hide dialect problems. | `db.py` |
+| Read-only | SQL is parsed (sqlglot, Postgres dialect), not pattern-matched: one statement only, no write/DDL node anywhere in the tree (including writable CTEs), no `SELECT … INTO`, no side-effect functions such as `pg_sleep`. A `READ ONLY` transaction is the backstop if the parser ever misses something. | `db.py` |
 | Resource limits | Row cap, 5 s statement timeout, connections always closed. | `db.py` |
 | Handling uncertainty | System prompt tells the agent to ask when a question names no measure/entity/period, to never invent numbers, and to say so when the data can't answer. | `library.AGENT_SYSTEM_PROMPT` |
 | Scope and safety | The agent declines off-topic requests, write requests and prompt-extraction attempts. | system prompt + guardrail |
@@ -82,7 +80,7 @@ History is kept in `evals/results/history/`:
 | baseline | 25/27 | `top_revenue_country` was judged correct by hand but failed a too-strict grader (fixed by adding `ranked_prefix` matching); `clarify_how_is_business` was a real failure: the agent built a report instead of asking |
 | held-out vague questions, before prompt change | 1/2 | `clarify_product_summary` failed the same way, so the weakness was general, not one question |
 | after prompt policy | 31/31, twice | clarify rule generalised to the held-out question; data unchanged after every run |
-| final (adds a Redshift-dialect case) | 32/32 | the agent used `FILTER`, the guardrail rejected it with a hint, and the agent recovered with `CASE WHEN` |
+| final (after removing the Redshift-specific lint, parser switched to Postgres) | 31/31 | same behaviour, re-verified on the code that is pushed |
 
 Read these as a sample, not a guarantee: the agent is non-deterministic, the set is small, and the grader
 is lenient about extra columns. The point is a repeatable way to notice regressions when the prompt,
@@ -101,9 +99,6 @@ On Render, set `DATABASE_URL` to the **Internal** database URL; locally use the 
 
 ## Known limitations and next steps
 
-- **Postgres, not Redshift.** The code path is the same (psycopg2, Redshift-dialect parsing), but it has
-  not been run against real Redshift. The `READ ONLY` transaction backstop should be verified there; the
-  real boundary on Redshift should be a database user with `SELECT` on the allowed tables only.
 - **Scope is checked by column name, not resolved through aliases.** A column allowed on one table
   referenced in the query is allowed for the query. Column-level enforcement in the database (views or
   grants) would be stricter.

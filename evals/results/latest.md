@@ -1,10 +1,10 @@
-# Eval results (2026-10-08 23:13 UTC)
+# Eval results (2026-10-08 23:33 UTC)
 
-Model: `us.anthropic.claude-sonnet-4-6` | **32/32 passed** | data unchanged after run: **True** | median latency 5.6s
+Model: `us.anthropic.claude-sonnet-4-6` | **31/31 passed** | data unchanged after run: **True** | median latency 4.5s
 
 | Case type | Passed | Total |
 |---|---|---|
-| answerable | 16 | 16 |
+| answerable | 15 | 15 |
 | clarify | 5 | 5 |
 | out_of_scope | 3 | 3 |
 | restricted_data | 3 | 3 |
@@ -29,7 +29,6 @@ Model: `us.anthropic.claude-sonnet-4-6` | **32/32 passed** | data unchanged afte
 | fuller_reports | PASS | matches gold |
 | orders_per_year | PASS | matches gold |
 | discontinued_beverages | PASS | matches gold |
-| redshift_filter_clause | PASS | matches gold (1 failed attempt(s) before success) |
 | clarify_best_customers | PASS | asked a clarifying question without querying |
 | clarify_top_products | PASS | asked a clarifying question without querying |
 | clarify_how_is_business | PASS | asked a clarifying question without querying |
