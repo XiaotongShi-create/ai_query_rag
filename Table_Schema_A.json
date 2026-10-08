@@ -9,6 +9,7 @@
         {"name": "customer_id", "description": "unique identifier for a customer (5-character code)", "synonyms": ["customer id", "client id"]},
         {"name": "company_name", "description": "name of the customer's company", "synonyms": ["customer name", "client name", "company"]},
         {"name": "contact_name", "description": "name of the primary contact person at the company"},
+        {"name": "contact_title", "description": "job title of the primary contact person"},
         {"name": "city", "description": "city the customer is located in"},
         {"name": "region", "description": "state/region the customer is located in"},
         {"name": "country", "description": "country the customer is located in", "synonyms": ["location"]}
@@ -34,6 +35,7 @@
         {"name": "customer_id", "description": "id of the customer who placed the order", "synonyms": ["customer id"]},
         {"name": "employee_id", "description": "id of the employee (sales rep) who handled the order", "synonyms": ["employee id", "sales rep"]},
         {"name": "order_date", "description": "date the order was placed", "synonyms": ["order time", "order day"]},
+        {"name": "required_date", "description": "date the customer asked for the order to arrive by", "synonyms": ["due date"]},
         {"name": "shipped_date", "description": "date the order was shipped; null if not yet shipped", "synonyms": ["ship date"]},
         {"name": "ship_via", "description": "id of the shipper used for this order, references shippers.shipper_id"},
         {"name": "freight", "description": "shipping cost for the order"},
@@ -80,14 +82,16 @@
     {
       "separator": "table_4",
       "name": "products",
-      "schema": "CREATE TABLE products (product_id smallint, product_name character varying(40), supplier_id smallint, category_id smallint, unit_price real, units_in_stock smallint, discontinued integer);",
+      "schema": "CREATE TABLE products (product_id smallint, product_name character varying(40), supplier_id smallint, category_id smallint, unit_price real, units_in_stock smallint, reorder_level smallint, discontinued integer);",
       "description": "Catalog of items that can be ordered.",
       "columns": [
         {"name": "product_id", "description": "unique identifier for a product", "synonyms": ["item id"]},
         {"name": "product_name", "description": "name of the product", "synonyms": ["item name"]},
+        {"name": "supplier_id", "description": "id of the supplier that provides this product"},
         {"name": "category_id", "description": "id of the category this product belongs to, references categories.category_id"},
         {"name": "unit_price", "description": "list price per unit"},
         {"name": "units_in_stock", "description": "current inventory count"},
+        {"name": "reorder_level", "description": "inventory level at which the product should be restocked"},
         {"name": "discontinued", "description": "1 if the product is discontinued, 0 if active"}
       ],
       "sample_queries": [
@@ -108,7 +112,8 @@
       "description": "Product categories, e.g. Beverages, Condiments, Produce.",
       "columns": [
         {"name": "category_id", "description": "unique identifier for a category"},
-        {"name": "category_name", "description": "name of the category", "synonyms": ["category"]}
+        {"name": "category_name", "description": "name of the category", "synonyms": ["category"]},
+        {"name": "description", "description": "short description of the category"}
       ],
       "sample_queries": [
         {
@@ -127,7 +132,8 @@
         {"name": "first_name", "description": "employee's first name"},
         {"name": "last_name", "description": "employee's last name"},
         {"name": "title", "description": "employee's job title, e.g. Sales Representative"},
-        {"name": "hire_date", "description": "date the employee was hired"}
+        {"name": "hire_date", "description": "date the employee was hired"},
+        {"name": "reports_to", "description": "employee_id of this employee's manager; null for the top of the hierarchy"}
       ],
       "sample_queries": [
         {
@@ -139,7 +145,7 @@
     {
       "separator": "table_7",
       "name": "shippers",
-      "schema": "CREATE TABLE shippers (shipper_id smallint, company_name character varying(40), phone character varying(24));",
+      "schema": "CREATE TABLE shippers (shipper_id smallint, company_name character varying(40));",
       "description": "Shipping companies used to fulfill orders. Referenced by orders.ship_via.",
       "columns": [
         {"name": "shipper_id", "description": "unique identifier for a shipper"},
