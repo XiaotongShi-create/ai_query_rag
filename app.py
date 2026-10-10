@@ -83,7 +83,7 @@ elif selected_menu_item == "How To":
 elif selected_menu_item == "Generate SQL Query":
     # Define the available schema types
     schema_types = list(lib.SCHEMA_FILES)
-    schema_type = st.sidebar.selectbox("Select Schema Type", schema_types)
+    schema_type = st.sidebar.selectbox("Select dataset", schema_types)
 
     if schema_type:
         if not lib.aws_credentials_available():

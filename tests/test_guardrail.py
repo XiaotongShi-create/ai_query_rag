@@ -21,7 +21,7 @@ os.chdir(REPO_ROOT)  # library.load_schema_file uses a relative path
 import db  # noqa: E402
 import library as lib  # noqa: E402
 
-SCOPE = lib.get_allowed_scope("Schema_Type_A")
+SCOPE = lib.get_allowed_scope("Northwind Sales")
 
 
 def rejected(sql, scope=SCOPE):
@@ -156,6 +156,35 @@ class AgentQueryTool(unittest.TestCase):
         self.assertEqual(len(self.captured), 1)
 
 
+class ConnectionHandling(unittest.TestCase):
+    """Uses a fake connection, so it is deterministic (counting server-side connections is
+    not: other clients, such as the deployed app, connect to the same database)."""
+
+    def run_with_fake_connection(self, execute_side_effect=None):
+        fake_conn = mock.MagicMock()
+        fake_cursor = fake_conn.cursor.return_value.__enter__.return_value
+        fake_cursor.description = [("n",)]
+        fake_cursor.fetchmany.return_value = [(1,)]
+        if execute_side_effect:
+            fake_cursor.execute.side_effect = execute_side_effect
+        with mock.patch.dict(os.environ, {"DATABASE_URL": "postgres://fake"}), \
+                mock.patch.object(db.psycopg2, "connect", return_value=fake_conn):
+            try:
+                db.run_select_query("SELECT 1", scope=None)
+            except RuntimeError:
+                pass
+        return fake_conn
+
+    def test_connection_is_closed_and_read_only_after_success(self):
+        conn = self.run_with_fake_connection()
+        conn.set_session.assert_called_once_with(readonly=True)
+        conn.close.assert_called_once()
+
+    def test_connection_is_closed_even_when_the_query_fails(self):
+        conn = self.run_with_fake_connection(execute_side_effect=[None, RuntimeError("boom")])
+        conn.close.assert_called_once()
+
+
 @unittest.skipUnless(os.environ.get("DATABASE_URL"), "DATABASE_URL not set")
 class AgainstTheDatabase(unittest.TestCase):
     def test_returns_dataframe_capped_at_limit(self):  # (db)
@@ -168,13 +197,6 @@ class AgainstTheDatabase(unittest.TestCase):
         with mock.patch.object(db, "_with_row_limit", return_value="DELETE FROM orders WHERE false"):
             with self.assertRaises(psycopg2.errors.ReadOnlySqlTransaction):
                 db.run_select_query("SELECT 1", scope=None)
-
-    def test_connections_are_closed(self):  # (db)
-        before = db.run_select_query("SELECT COUNT(*) FROM pg_stat_activity", scope=None).iat[0, 0]
-        for _ in range(5):
-            db.run_select_query("SELECT 1", scope=None)
-        after = db.run_select_query("SELECT COUNT(*) FROM pg_stat_activity", scope=None).iat[0, 0]
-        self.assertLessEqual(after, before + 1)
 
 
 if __name__ == "__main__":
