@@ -34,7 +34,7 @@ load_dotenv(REPO_ROOT / ".env")
 import db  # noqa: E402  (needs env loaded first)
 import library as lib  # noqa: E402
 
-SCHEMA_TYPE = "Schema_Type_A"
+SCHEMA_TYPE = "Northwind Sales"
 GOLDEN_SET = Path(__file__).parent / "golden_set.json"
 RESULTS_DIR = Path(__file__).parent / "results"
 

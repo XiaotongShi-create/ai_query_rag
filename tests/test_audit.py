@@ -27,7 +27,7 @@ class Writes(unittest.TestCase):
 
     def test_answer_record_is_complete_and_partitioned(self):
         error, key, record = self.logged(
-            audit.log_answer, "abc123", session_id="s1", schema_type="Schema_Type_A",
+            audit.log_answer, "abc123", session_id="s1", schema_type="Northwind Sales",
             model="m", question="q", answer="a", query_log=[BAD, OK], latency_s=1.234,
         )
         self.assertIsNone(error)

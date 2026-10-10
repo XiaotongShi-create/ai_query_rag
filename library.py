@@ -67,7 +67,7 @@ def get_llm():
 # The schema types the app offers, and the semantic-layer file behind each one.
 # The UI dropdown is built from this dict, so to add a schema: add its JSON file and one entry here.
 SCHEMA_FILES = {
-    "Schema_Type_A": "Table_Schema_A.json",
+    "Northwind Sales": "Table_Schema_A.json",
 }
 
 # Function to load the schema file based on the schema type
