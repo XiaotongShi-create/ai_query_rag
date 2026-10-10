@@ -1,5 +1,5 @@
 {
-  "_about": "Golden set for the NL-to-SQL agent. Questions are deliberately NOT the sample_queries in Table_Schema_A.json, because the agent retrieves that file -- testing on them would leak the answers. 'answerable' cases are graded by execution accuracy: the agent's result set must equal the result of gold_sql. Other types grade behaviour (ask / refuse / stay in scope / stay read-only).",
+  "_about": "Golden set for the NL-to-SQL agent. Questions are deliberately NOT the sample_queries in semantic_layer/northwind_sales.json, because the agent retrieves that file -- testing on them would leak the answers. 'answerable' cases are graded by execution accuracy: the agent's result set must equal the result of gold_sql. Other types grade behaviour (ask / refuse / stay in scope / stay read-only).",
   "cases": [
     {"id": "avg_freight_uk", "type": "answerable",
      "question": "What is the average freight cost for orders shipped to the UK?",

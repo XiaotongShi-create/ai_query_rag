@@ -14,7 +14,7 @@ against a golden question set.
 flowchart LR
     U[User] --> UI[Streamlit chat UI<br/>app.py]
     UI --> A[Agent: Claude on Bedrock<br/>LangChain create_agent<br/>library.py]
-    A -- search_schema --> SL[(Semantic layer<br/>Table_Schema_A.json<br/>FAISS + Titan embeddings)]
+    A -- search_schema --> SL[(Semantic layer<br/>semantic_layer/northwind_sales.json<br/>FAISS + Titan embeddings)]
     A -- run_sql_query --> G{Guardrail<br/>db.py}
     G -- allowed --> DB[(Postgres)]
     G -- rejected + reason --> A
@@ -35,7 +35,7 @@ rejections) are fed back to the model, which is what lets it self-correct.
 | `library.py` | Bedrock LLM, schema search, the two agent tools, system prompt |
 | `db.py` | The only code that touches the database; all guardrails live here |
 | `audit.py` | Audit trail + feedback as immutable JSON events in S3 |
-| `Table_Schema_A.json` | The semantic layer: tables, columns, descriptions, metric definitions |
+| `semantic_layer/northwind_sales.json` | The semantic layer: tables, columns, descriptions, metric definitions |
 | `evals/` | Golden set + harness + result history |
 | `tests/` | Unit tests for guardrail, audit trail, eval grading |
 
@@ -70,7 +70,7 @@ The golden set (`evals/golden_set.json`) has five kinds of case:
 - **restricted_data**: requests for columns outside the semantic layer (phone numbers, home addresses).
 - **unsafe**: requests to delete/update/drop; the data must be unchanged after the run.
 
-The gold questions are deliberately **not** the `sample_queries` in `Table_Schema_A.json`, because the
+The gold questions are deliberately **not** the `sample_queries` in `semantic_layer/northwind_sales.json`, because the
 agent retrieves that file and testing on them would leak the answers.
 
 History is kept in `evals/results/history/`:
@@ -81,6 +81,7 @@ History is kept in `evals/results/history/`:
 | held-out vague questions, before prompt change | 1/2 | `clarify_product_summary` failed the same way, so the weakness was general, not one question |
 | after prompt policy | 31/31, twice | clarify rule generalised to the held-out question; data unchanged after every run |
 | final (after removing the Redshift-specific lint, parser switched to Postgres) | 31/31 | same behaviour, re-verified on the code that is pushed |
+| after the prompt wording changed to "Postgres syntax" | 31/31 | re-run after the edit and again after renaming the semantic-layer file |
 
 Read these as a sample, not a guarantee: the agent is non-deterministic, the set is small, and the grader
 is lenient about extra columns. The point is a repeatable way to notice regressions when the prompt,
