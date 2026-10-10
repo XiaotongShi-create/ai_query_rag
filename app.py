@@ -82,7 +82,7 @@ elif selected_menu_item == "How To":
 # SQL-AI page content
 elif selected_menu_item == "Generate SQL Query":
     # Define the available schema types
-    schema_types = ["Schema_Type_A", "Schema_Type_B", "Schema_Type_C"]
+    schema_types = list(lib.SCHEMA_FILES)
     schema_type = st.sidebar.selectbox("Select Schema Type", schema_types)
 
     if schema_type:
