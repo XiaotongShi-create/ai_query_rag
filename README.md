@@ -111,4 +111,3 @@ On Render, set `DATABASE_URL` to the **Internal** database URL; locally use the 
   accuracy, failure rate or negative feedback.
 - **S3 is a log destination, not a data source.** The older `logs.xlsx` conversation log is still
   written alongside the new audit events and should be retired.
-- The schema dropdown lists `Schema_Type_B` and `Schema_Type_C`, which have no schema files yet.

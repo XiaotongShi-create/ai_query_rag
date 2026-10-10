@@ -64,15 +64,15 @@ def get_llm():
 
     return llm
 
+# The schema types the app offers, and the semantic-layer file behind each one.
+# The UI dropdown is built from this dict, so to add a schema: add its JSON file and one entry here.
+SCHEMA_FILES = {
+    "Schema_Type_A": "Table_Schema_A.json",
+}
+
 # Function to load the schema file based on the schema type
 def load_schema_file(schema_type):
-    if schema_type == 'Schema_Type_A':
-        schema_file = "Table_Schema_A.json"  # Path to Schema Type A
-    elif schema_type == 'Schema_Type_B':
-        schema_file = "Table_Schema_B.json"  # Path to Schema Type B
-    elif schema_type == 'Schema_Type_C':
-        schema_file = "Table_Schema_C.json"  # Path to Schema Type C
-    return schema_file
+    return SCHEMA_FILES[schema_type]
 
 # Function to get the tables/columns the agent is allowed to touch for a schema type.
 # The semantic layer file is the single source of truth: it feeds the model's schema
