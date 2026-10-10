@@ -64,13 +64,13 @@ def get_llm():
 
     return llm
 
-# The schema types the app offers, and the semantic-layer file behind each one.
+# The datasets the app offers, and the semantic-layer file behind each one.
 # The UI dropdown is built from this dict, so to add a schema: add its JSON file and one entry here.
 SCHEMA_FILES = {
-    "Northwind Sales": "Table_Schema_A.json",
+    "Northwind Sales": "semantic_layer/northwind_sales.json",
 }
 
-# Function to load the schema file based on the schema type
+# Function to get the semantic-layer file (tables, columns, metric definitions) for a dataset
 def load_schema_file(schema_type):
     return SCHEMA_FILES[schema_type]
 
@@ -91,7 +91,6 @@ def get_index(schema_type):
 
     db_schema_loader = JSONLoader(
         file_path=load_schema_file(schema_type),  # Load the schema file
-        # file_path="Table_Schema_RP.json",  # Uncomment to use a different file
         jq_schema='.',  # Select the entire JSON content
         text_content=False)  # Treat the content as text
 

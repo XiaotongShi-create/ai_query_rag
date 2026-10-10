@@ -114,7 +114,7 @@ class SemanticLayerIsConsistent(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.tables = json.loads((REPO_ROOT / "Table_Schema_A.json").read_text())["tables"]
+        cls.tables = json.loads((REPO_ROOT / "semantic_layer" / "northwind_sales.json").read_text())["tables"]
 
     def test_ddl_columns_match_documented_columns(self):
         for table in self.tables:

@@ -9,7 +9,7 @@ Guardrail layers, outermost first:
   2. Read-only: the parse tree may contain no write/DDL/side-effect nodes anywhere,
      including inside CTEs (writable CTEs are the classic way around keyword checks).
   3. Scope: only tables/columns documented in the semantic layer may be touched
-     (see Table_Schema_A.json); SELECT * on a physical table is refused.
+     (see semantic_layer/northwind_sales.json); SELECT * on a physical table is refused.
   4. Limits: row cap, statement timeout, and a READ ONLY transaction enforced by the
      database itself as a backstop in case 1-3 ever miss something.
 """
