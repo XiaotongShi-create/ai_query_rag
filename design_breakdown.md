@@ -2,7 +2,7 @@
 
 **Project overview:** A conversational analytics assistant that lets users ask business questions in everyday language and receive answers based on database records. It connects an AI model with database information and controlled tools, with safeguards and logs to support more reliable use.
 
-## 1. Conversational AI Data Products
+## 1. Product Design
 
 **Goal:** Make business data accessible without requiring users to write SQL or understand database structures.
 
