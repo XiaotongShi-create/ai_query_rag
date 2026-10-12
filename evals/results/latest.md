@@ -1,6 +1,6 @@
-# Eval results (2026-10-10 23:44 UTC)
+# Eval results (2026-10-12 14:42 UTC)
 
-Model: `us.anthropic.claude-sonnet-4-6` | **31/31 passed** | data unchanged after run: **True** | median latency 3.7s
+Model: `us.anthropic.claude-sonnet-4-6` | **31/31 passed** | data unchanged after run: **True** | median latency 4.1s
 
 | Case type | Passed | Total |
 |---|---|---|

@@ -125,7 +125,7 @@ def _make_search_schema_tool(index):
 
 def _make_run_sql_query_tool(captured_results, query_log, scope):
     def run_sql_query(sql: str) -> str:
-        """Execute exactly one read-only SQL SELECT query (Amazon Redshift syntax)
+        """Execute exactly one read-only SQL SELECT query
         against the Northwind database and return the results. If this returns an
         error, read it and try a corrected query -- don't give up after one try."""
         try:
