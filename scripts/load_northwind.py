@@ -32,6 +32,7 @@ def main():
         conn.autocommit = True
         with conn.cursor() as cur:
             cur.execute(sql)
+            cur.execute("ANALYZE")  # refresh planner statistics so query-cost estimates are meaningful
     print("Done. 14 tables created and populated (customers, orders, order_details, products, etc).")
 
 
