@@ -21,6 +21,7 @@ import uuid
 from io import StringIO
 import boto3
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError
+from langgraph.errors import GraphRecursionError
 from datetime import datetime
 import csv
 import pandas as pd
@@ -147,13 +148,17 @@ elif selected_menu_item == "Generate SQL Query":
             ]
             started = time.time()
             try:
-                agent_result = agent.invoke({"messages": agent_messages})
+                # recursion_limit caps the agent's steps for this question (cost control)
+                agent_result = agent.invoke({"messages": agent_messages},
+                                            config={"recursion_limit": lib.AGENT_STEP_LIMIT})
+                chat_response = lib.extract_final_text(agent_result)
+            except GraphRecursionError:
+                chat_response = ("I could not finish answering that within my step limit. "
+                                 "Could you narrow the question, for example to one measure or one period?")
             except (NoCredentialsError, PartialCredentialsError):
                 st.error(lib.get_aws_setup_message())
                 st.stop()
             latency_s = time.time() - started
-
-            chat_response = lib.extract_final_text(agent_result)
 
             # Audit trail: one immutable record per answer, including every SQL attempt
             audit_id = audit.new_event_id()

@@ -10,11 +10,15 @@ Guardrail layers, outermost first:
      including inside CTEs (writable CTEs are the classic way around keyword checks).
   3. Scope: only tables/columns documented in the semantic layer may be touched
      (see semantic_layer/northwind_sales.json); SELECT * on a physical table is refused.
-  4. Limits: row cap, statement timeout, and a READ ONLY transaction enforced by the
-     database itself as a backstop in case 1-3 ever miss something.
+  4. Cost: before running, the database's own planner estimates the query's cost
+     (EXPLAIN, which executes nothing). Queries over the limit are refused, and every
+     question gets a budget shared by all the queries the agent runs for it.
+  5. Limits: row cap, statement timeout, and a READ ONLY transaction enforced by the
+     database itself as a backstop in case 1-4 ever miss something.
 """
 import os
 from contextlib import closing
+from dataclasses import dataclass
 
 import pandas as pd
 import psycopg2
@@ -24,6 +28,14 @@ from sqlglot.errors import SqlglotError
 
 DEFAULT_ROW_LIMIT = 500
 STATEMENT_TIMEOUT_MS = 5000
+
+# Cost limits. "Cost" is the Postgres planner's unitless estimate (a sequential page read = 1.0),
+# so it is only meaningful relative to your own data: on the Northwind demo the most expensive
+# legitimate question costs ~115 and a 3-table cross join costs ~2.4 million. Re-measure with
+# EXPLAIN and re-tune these when the dataset grows. Override with environment variables.
+MAX_QUERY_COST = float(os.environ.get("MAX_QUERY_COST", 10_000))
+MAX_QUERIES_PER_QUESTION = int(os.environ.get("MAX_QUERIES_PER_QUESTION", 6))
+MAX_TOTAL_COST_PER_QUESTION = float(os.environ.get("MAX_TOTAL_COST_PER_QUESTION", 20_000))
 
 # Scope is {table_name: {allowed_column_name, ...}} -- built from the semantic layer.
 Scope = dict
@@ -46,6 +58,42 @@ _DENIED_FUNCTIONS = {
 class UnsafeQueryError(Exception):
     """Raised when generated SQL fails the guardrail. The message is shown to the
     model, so it says what to do instead, which lets the agent self-correct."""
+
+
+class QueryTooExpensiveError(UnsafeQueryError):
+    """The planner estimates this single query costs more than the limit."""
+
+    def __init__(self, message: str, estimated_cost: float):
+        super().__init__(message)
+        self.estimated_cost = estimated_cost
+
+
+class QueryBudgetExceededError(UnsafeQueryError):
+    """The question has used up its allowance of queries or total estimated cost."""
+
+
+@dataclass
+class QueryBudget:
+    """The spending allowance for ONE question. Create a fresh one per question and pass it to
+    every run_select_query call made while answering it, so many cheap-looking queries (or
+    endless retries) cannot add up to an expensive question."""
+
+    max_queries: int = MAX_QUERIES_PER_QUESTION
+    max_total_cost: float = MAX_TOTAL_COST_PER_QUESTION
+    queries_used: int = 0
+    cost_used: float = 0.0
+    last_cost: float = None  # estimate for the most recent call; None if it failed before estimating
+
+    def charge_attempt(self) -> None:
+        # Every call counts, including ones rejected for other reasons: a model stuck retrying
+        # a bad query still burns LLM tokens, and this is what stops that loop.
+        self.last_cost = None
+        if self.queries_used >= self.max_queries:
+            raise QueryBudgetExceededError(
+                f"This question has used its limit of {self.max_queries} queries. Do not run "
+                "more queries: answer with what you already have, or ask the user to narrow the question."
+            )
+        self.queries_used += 1
 
 
 def _function_name(node: exp.Expression) -> str:
@@ -152,8 +200,25 @@ def _with_row_limit(sql: str, tree: exp.Expression, limit: int) -> str:
     return f"{stripped}\nLIMIT {limit}"
 
 
-def run_select_query(sql: str, limit: int = DEFAULT_ROW_LIMIT, scope: Scope = None) -> pd.DataFrame:
-    """Validate and execute a read-only query, returning results as a DataFrame."""
+def _estimate_cost(cur, sql: str) -> float:
+    """Ask the database planner what this query would cost. EXPLAIN plans the query but runs
+    nothing, and it fails with the same error execution would for a bad column or table."""
+    cur.execute("EXPLAIN (FORMAT JSON) " + sql)
+    return float(cur.fetchone()[0][0]["Plan"]["Total Cost"])
+
+
+def run_select_query(
+    sql: str,
+    limit: int = DEFAULT_ROW_LIMIT,
+    scope: Scope = None,
+    budget: QueryBudget = None,
+    max_query_cost: float = None,
+) -> pd.DataFrame:
+    """Validate, cost-check and execute a read-only query, returning results as a DataFrame."""
+    if budget is not None:
+        budget.charge_attempt()
+    max_query_cost = MAX_QUERY_COST if max_query_cost is None else max_query_cost
+
     tree = validate_query(sql, scope)
     safe_sql = _with_row_limit(sql, tree, limit)
 
@@ -166,8 +231,28 @@ def run_select_query(sql: str, limit: int = DEFAULT_ROW_LIMIT, scope: Scope = No
         conn.set_session(readonly=True)
         with conn.cursor() as cur:
             cur.execute(f"SET statement_timeout = {STATEMENT_TIMEOUT_MS}")
+
+            cost = _estimate_cost(cur, safe_sql)
+            if budget is not None:
+                budget.last_cost = cost
+            if cost > max_query_cost:
+                raise QueryTooExpensiveError(
+                    f"Estimated cost {cost:,.0f} is over the limit of {max_query_cost:,.0f}: this query "
+                    "would scan or combine too much data. Add filters, aggregate earlier, or join tables "
+                    "on a key instead of multiplying them.",
+                    cost,
+                )
+            if budget is not None and budget.cost_used + cost > budget.max_total_cost:
+                raise QueryBudgetExceededError(
+                    f"This question's total cost budget ({budget.max_total_cost:,.0f}) would be exceeded "
+                    f"(already used {budget.cost_used:,.0f}, this query adds {cost:,.0f}). Do not run more "
+                    "queries: answer with what you already have, or ask the user to narrow the question."
+                )
+
             cur.execute(safe_sql)
             columns = [desc[0] for desc in cur.description]
             rows = cur.fetchmany(limit)
 
+    if budget is not None:
+        budget.cost_used += cost
     return pd.DataFrame(rows, columns=columns)

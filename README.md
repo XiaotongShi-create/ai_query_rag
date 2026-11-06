@@ -42,7 +42,8 @@ flowchart LR
 
 - **It can only read.** Writes, deletes, and anything outside the documented tables and columns are blocked in code, not just in the prompt.
 - **It asks instead of guessing,** and says so when the data cannot answer a question.
-- **It is tested.** 31 test questions check answers, refusals, and that the data is never changed. The last run passed 31 of 31.
+- **It watches cost.** Before a query runs, the database estimates how expensive it is. Costly queries (for example, multiplying whole tables together) are refused, and each question has a limit on how many queries it can run.
+- **It is tested.** 33 test questions check answers, refusals, cost limits, and that the data is never changed. The last run passed 33 of 33.
 - **It is recorded.** Every answer is logged with the SQL used, and users can give feedback.
 
 The reasoning behind these choices is in [design_breakdown.md](design_breakdown.md).
@@ -65,6 +66,7 @@ streamlit run app.py
 | `DATABASE_URL` | yes | Postgres connection string |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | yes | AWS credentials with Bedrock and S3 access |
 | `AUDIT_BUCKET` | recommended | S3 bucket for the audit log and feedback. The default is the author's bucket, so set your own |
+| `MAX_QUERY_COST`, `MAX_QUERIES_PER_QUESTION`, `MAX_TOTAL_COST_PER_QUESTION` | no | Cost limits (defaults: 10000, 6, 20000). See [Limitations](#limitations) before changing them |
 
 Two things to know before you run it:
 
@@ -83,8 +85,8 @@ Two things to know before you run it:
 ## Tests and evaluation
 
 ```bash
-python -m unittest discover -s tests -t .   # 29 unit tests (database tests are skipped without DATABASE_URL)
-python -m evals.run_evals                   # asks the AI all 31 test questions; needs AWS and the database
+python -m unittest discover -s tests -t .   # 42 unit tests (database tests are skipped without DATABASE_URL)
+python -m evals.run_evals                   # asks the AI all 33 test questions; needs AWS and the database
 ```
 
 The test questions are in `evals/golden_set.json`, and results are saved in `evals/results/`. The AI's answers
@@ -113,7 +115,8 @@ database's **Internal** URL on Render (use the **External** URL on your own mach
 
 - **No user logins or per-user permissions.** Everyone sees the same tables.
 - **No monitoring yet.** The audit log has the data, but there is no dashboard or alerting.
-- **Small test set.** 31 questions cannot cover everything users might ask.
+- **Small test set.** 33 questions cannot cover everything users might ask.
+- **Cost limits are tuned to the sample data.** "Cost" is the database planner's estimate in relative units, not money, so the limits need re-measuring on a bigger database. The AI model's own usage (tokens) is only capped by a step limit per question, not tracked in money, and there is no per-user rate limit.
 - **Built around the Northwind data.** The agent's instructions and the test questions would need rewriting for another dataset.
 - **Column checks go by name only,** not by which table a column belongs to, so they are looser than database-level permissions would be.
 

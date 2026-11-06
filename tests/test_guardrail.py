@@ -137,7 +137,7 @@ class AgentQueryTool(unittest.TestCase):
 
     def setUp(self):
         self.captured, self.query_log = [], []
-        self.tool = lib._make_run_sql_query_tool(self.captured, self.query_log, SCOPE)
+        self.tool = lib._make_run_sql_query_tool(self.captured, self.query_log, SCOPE, db.QueryBudget())
 
     def test_write_attempt_is_rejected_and_logged(self):
         reply = self.tool("DELETE FROM orders")
