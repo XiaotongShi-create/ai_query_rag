@@ -18,6 +18,22 @@ class ReliabilitySignal(unittest.TestCase):
         self.assertEqual(audit.reliability_signal([]), "no_query")
 
 
+class CostFields(unittest.TestCase):
+    def test_cost_summary_counts_only_successful_queries_and_flags_cost_blocks(self):
+        log = [
+            {"sql": "a", "status": "ok", "error": None, "rows": 1, "est_cost": 40.04},
+            {"sql": "b", "status": "too_expensive", "error": "x", "rows": None, "est_cost": 2442515.8},
+            {"sql": "c", "status": "over_budget", "error": "y", "rows": None, "est_cost": None},
+        ]
+        with mock.patch("audit.boto3.client") as client:
+            audit.log_answer("e1", session_id="s", schema_type="t", model="m", question="q",
+                             answer="a", query_log=log, latency_s=1)
+        record = json.loads(client.return_value.put_object.call_args.kwargs["Body"])
+        self.assertEqual(record["total_est_cost"], 40.0)      # blocked queries never ran, so they cost nothing
+        self.assertEqual(record["n_blocked_for_cost"], 2)
+        self.assertEqual(record["n_failed_queries"], 2)
+
+
 class Writes(unittest.TestCase):
     def logged(self, fn, *args, **kwargs):
         with mock.patch("audit.boto3.client") as client:

@@ -67,9 +67,13 @@ def log_answer(event_id, *, session_id, schema_type, model, question, answer, qu
         "model": model,
         "question": question,
         "answer": answer,
-        "queries": query_log,  # every attempt: sql, status (ok/rejected/error), error, rows
+        # every attempt: sql, status (ok / rejected / too_expensive / over_budget / error),
+        # error, rows, est_cost (the planner's cost estimate; None if it failed before estimating)
+        "queries": query_log,
         "n_queries": len(query_log),
         "n_failed_queries": sum(1 for q in query_log if q["status"] != "ok"),
+        "n_blocked_for_cost": sum(1 for q in query_log if q["status"] in ("too_expensive", "over_budget")),
+        "total_est_cost": round(sum(q.get("est_cost") or 0 for q in query_log if q["status"] == "ok"), 1),
         "reliability_signal": reliability_signal(query_log),
         "latency_s": round(latency_s, 2),
     }
